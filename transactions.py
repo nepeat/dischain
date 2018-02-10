@@ -1,19 +1,23 @@
 import struct
 
 HEADER_SIZE = 1 + 8
-INITIAL_HEADER_SIZE = HEADER_SIZE + (8 * 2)
+INITIAL_HEADER_SIZE = HEADER_SIZE + (8 * 3)
 
 
 class Transaction:
-    def __init__(self, server_id: int, channel_id: int, message_id: int, data: str):
+    def __init__(self, server_id: int, channel_id: int, user_id: int, message_id: int, data: str):
         self.server_id = server_id
         self.channel_id = channel_id
+        self.user_id = user_id
         self.message_id = message_id
 
         if isinstance(data, str):
             self.data = data.encode("utf8")
         else:
             self.data = data
+
+    def chunk_count(self, size: int=80):
+        return len(self.chunk_data(size))
 
     def chunk_data(self, size: int=80):
         data_copy = bytes(self.data)
@@ -42,7 +46,7 @@ class Transaction:
             chunk_len = len(chunk)
 
             if nonce == 0:
-                payload = struct.pack(f"!BQQQ{chunk_len}s", nonce, self.message_id, self.server_id, self.channel_id, chunk)
+                payload = struct.pack(f"!BQQQQ{chunk_len}s", nonce, self.message_id, self.server_id, self.channel_id, self.user_id, chunk)
             else:
                 payload = struct.pack(f"!BQ{chunk_len}s", nonce, self.message_id, chunk)
 
