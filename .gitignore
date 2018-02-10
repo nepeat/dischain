@@ -109,8 +109,7 @@ virtualenv/
 .DS_Store
 
 # direnv
-.direnv/
-.envrc
+.direnv
 
 # App large files
 tools/data.js
