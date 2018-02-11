@@ -14,7 +14,7 @@ from pycoin.key.validate import netcode_and_type_for_text
 from pycoin.tx.pay_to import ScriptPayToAddress, ScriptNulldata
 from pycoin.serialize import b2h, b2h_rev, h2b, h2b_rev
 
-STATIC_FEE = float(os.environ.get("COIN_FEE", 0.01))
+STATIC_FEE = float(os.environ.get("COIN_FEE", 0.015))
 NETWORKS = [
     Network(
         "SHND", "StrongHands", "mainnet",
@@ -34,10 +34,8 @@ class CoinDaemon:
         for network in NETWORKS:
             register_network(network)
 
-    @property
-    def fee(self) -> int:
-        # XXX: Make this calculate a dynamic fee for other networks.
-        return STATIC_FEE * 1000000
+    def fee(self, size: int=0) -> int:
+        return (STATIC_FEE * 1000000) * (1 + size/1024)
 
     @property
     def return_fee(self) -> int:
@@ -67,12 +65,14 @@ class CoinDaemon:
 
         return index, script, best_value
 
-    def make_return_txs(self, address: str, transaction: Transaction, use_sends: bool=False) -> bool:
+    def make_txs(self, address: str, transaction: Transaction, use_sends: bool=False) -> bool:
         # We'll do our own chunking if we have to send to address hashes.
         if use_sends:
             payload_chunk_size = 999999
         else:
             payload_chunk_size = self.return_size
+        
+        total_fee_needed = self.fee(len(transaction.data))
 
         # Check for unspents.
         unspents = self.connection.listunspent(0, 9999999, [address])
@@ -94,7 +94,7 @@ class CoinDaemon:
         needed_txes = transaction.chunk_count(payload_chunk_size)
         print(f"{needed_txes} TXs required.")
 
-        required_coins = (needed_txes * self.fee)
+        required_coins = (needed_txes * total_fee_needed)
         if required_coins >= last_amount:
             raise Exception(f"Not enough coins to cover insertions. ({required_coins} or greater needed.)")
 
@@ -110,29 +110,33 @@ class CoinDaemon:
             txs_in = [spendable.tx_in() for spendable in spendables]
 
             # txout
+            # XXX: MAKE A BETTER TOTAL ESTIMATION ALGO
             if use_sends:
-                last_index, txs_out = self.generate_addr_txouts(address_hash160, payload, last_amount)
+                gen_function = self.generate_addr_txouts
+                # XXX: constants file
+                fee_needed = self.fee(len(payload)) * math.ceil(len(payload) / 20)
             else:
-                last_index, txs_out = self.generate_return_txouts(address_hash160, payload, last_amount)
+                gen_function = self.generate_return_txouts
+                fee_needed = self.fee(len(payload)) * math.ceil(len(payload) / self.return_size)
+
+            last_index, txs_out = gen_function(address_hash160, payload, last_amount, fee_needed)
 
             new_tx = Tx(1, txs_in, txs_out)
 
             last_tx_id = new_tx.id()
-            last_amount = last_amount - self.fee - self.return_fee
+            last_amount = last_amount - fee_needed - self.return_fee
 
             print(new_tx.as_hex(with_time=True), end="\n\n")
 
-    def generate_addr_txouts(self, address_hash160, _payload, last_amount):
+    def generate_addr_txouts(self, address_hash160, _payload, last_amount, fee_needed):
         txs_out = []
         payload = io.BytesIO(_payload)
+        # XXX: constants file
         payload_size = 20
 
-        # XXX: MAKE A BETTER TOTAL ESTIMATION ALGO
-        tx_total = self.fee * math.ceil(len(_payload) / 20.0)
-
-        # Create our payment to ourselves minus the total for sending to the other addresses.
+        # Create our payment to ourselves.
         script_pay = ScriptPayToAddress(hash160=address_hash160).script()
-        txs_out.append(TxOut(last_amount - self.fee - tx_total, script_pay))
+        txs_out.append(TxOut(last_amount - fee_needed, script_pay))
 
         # Create all the payments to the data addresses.
         # Chunking from https://github.com/vilhelmgray/FamaMonetae/blob/master/famamonetae.py
@@ -148,18 +152,18 @@ class CoinDaemon:
                 chunk = chunk + (B'\x00') * (payload_size - chunk_size)
 
             script_data = ScriptPayToAddress(hash160=chunk).script()
-            txs_out.append(TxOut(self.fee, script_data))
+            txs_out.append(TxOut(self.return_fee, script_data))
 
         return 0, txs_out
 
-    def generate_return_txouts(self, address_hash160, payload, last_amount):
+    def generate_return_txouts(self, address_hash160, payload, last_amount, fee_needed):
         txs_out = []
 
         script_data = ScriptNulldata(nulldata=payload).script()
         txs_out.append(TxOut(self.return_fee, script_data))
 
         script_pay = ScriptPayToAddress(hash160=address_hash160).script()
-        txs_out.append(TxOut(last_amount - self.fee, script_pay))
+        txs_out.append(TxOut(last_amount - fee_needed, script_pay))
         
         return 1, txs_out
 """
@@ -180,4 +184,4 @@ if __name__ == "__main__":
     )
 
     coind = CoinDaemon(1024)
-    coind.make_return_txs("SP774U2L9YkYNyN7HWnuwr17EKuF3PavKZ", test_trans, True)
+    coind.make_txs("Se32GfsJuu76DLmupTWMKpWPtujYrBvfxi", test_trans, True)
