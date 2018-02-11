@@ -13,6 +13,7 @@ from transactions import Transaction
 from pycoin.key.validate import netcode_and_type_for_text
 from pycoin.tx.pay_to import ScriptPayToAddress, ScriptNulldata
 from pycoin.serialize import b2h, b2h_rev, h2b, h2b_rev
+import struct
 
 STATIC_FEE = float(os.environ.get("COIN_FEE", 0.015))
 NETWORKS = [
@@ -166,12 +167,22 @@ class CoinDaemon:
         txs_out.append(TxOut(last_amount - fee_needed, script_pay))
         
         return 1, txs_out
-"""
-CTransaction(hash=ab2a93f707, nTime=1518289602, ver=1, vin.size=1, vout.size=2, nLockTime=0)
-    CTxIn(COutPoint(7e44297cee, 1), scriptSig=3045022025dc8e798d1b059b)
-    CTxOut(nValue=498.99, scriptPubKey=OP_DUP OP_HASH160 4898f3c21d254866cf7c5ed8c677a912d4bb1c4b OP_EQUALVERIFY OP_CHECKSIG)
-    CTxOut(nValue=1.00, scriptPubKey=OP_DUP OP_HASH160 13e0b53a5e71e07d11da330d6bce7e491a06335a OP_EQUALVERIFY OP_CHECKSIG)
-"""
+
+    def read_tx(self, txhash: str):
+        result = ""
+        data = self.decode_raw_tx_from_tx(txhash)
+        for out in data["vout"]:
+            # Skip outputs greater than 0.1 coins because who uses that much coins for dust?
+            if out["value"] > 0.1:
+                continue
+            asm = out["scriptPubKey"]["asm"]
+            result += asm.split(" ")[2]
+
+        result = h2b(result).rstrip(b"\x00")
+        datalen = len(result) - 1 - (8 * 4)
+        result = struct.unpack(f"!BQQQQ{datalen}s", result)
+        print(result)
+        return result
 
 # test code, remove me later
 if __name__ == "__main__":
@@ -184,4 +195,5 @@ if __name__ == "__main__":
     )
 
     coind = CoinDaemon(1024)
-    coind.make_txs("Se32GfsJuu76DLmupTWMKpWPtujYrBvfxi", test_trans, True)
+    # coind.make_txs("Se32GfsJuu76DLmupTWMKpWPtujYrBvfxi", test_trans, True)
+    coind.read_tx("64e3262d4b7c6d528b972d84a6a7667bb07ba0373f68b8ee32d114101fb6b676")
