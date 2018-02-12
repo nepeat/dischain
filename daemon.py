@@ -209,15 +209,19 @@ if __name__ == "__main__":
 
     coind = CoinDaemon()
 
-    for transaction in coind.make_txs("SaryWoh3Aqrzk9r78uG7iBSTMPfz2suvGj", test_trans, True, dont_yield=[0]):
+    for transaction in coind.make_txs("SP774U2L9YkYNyN7HWnuwr17EKuF3PavKZ", test_trans, True, dont_yield=list(range(0,4))):
         signed_tx = coind.connection.signrawtransaction(transaction)["hex"]
+        if "PRINT_TX" in os.environ:
+            print(signed_tx)
+
         while True:
             try:
                 sent_tx = coind.connection.sendrawtransaction(signed_tx, 1)
+                print(sent_tx)
+                time.sleep(2)
                 break
             except Exception as e:
                 print("Failed to send TX. (%s)" % (e))
-                time.sleep(30)
-        print(sent_tx)
+                time.sleep(15)
 
     # print(coind.read_tx("64e3262d4b7c6d528b972d84a6a7667bb07ba0373f68b8ee32d114101fb6b676"))
