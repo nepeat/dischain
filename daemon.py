@@ -9,7 +9,7 @@ from pycoin.tx.TxIn import TxIn
 from pycoin.tx.TxOut import TxOut
 from pycoin.tx.Spendable import Spendable
 from pycoin.block import Block
-from transactions import Transaction
+from chunkers import Chunker, DiscordChunker
 from pycoin.key.validate import netcode_and_type_for_text
 from pycoin.tx.pay_to import ScriptPayToAddress, ScriptNulldata
 from pycoin.serialize import b2h, b2h_rev, h2b, h2b_rev
@@ -26,9 +26,8 @@ NETWORKS = [
 ]
 
 class CoinDaemon:
-    def __init__(self, return_size: int=80, store_method="P2K"):
+    def __init__(self, store_method="P2K"):
         self.connection = get_default_providers_for_netcode('BTC')[0].connection
-        self.return_size = return_size
         self.prepare()
 
     def prepare(self):
@@ -66,14 +65,12 @@ class CoinDaemon:
 
         return index, script, best_value
 
-    def make_txs(self, address: str, transaction: Transaction, use_sends: bool=False) -> bool:
+    def make_txs(self, address: str, chunker: Chunker, use_sends: bool=False) -> bool:
         # We'll do our own chunking if we have to send to address hashes.
         if use_sends:
-            payload_chunk_size = 999999
-        else:
-            payload_chunk_size = self.return_size
+            chunker.chunk_size = 999999
         
-        total_fee_needed = self.fee(len(transaction.data))
+        total_fee_needed = self.fee(len(chunker.data))
 
         # Check for unspents.
         unspents = self.connection.listunspent(0, 9999999, [address])
@@ -92,14 +89,14 @@ class CoinDaemon:
         _, _, address_hash160 = netcode_and_type_for_text(address)
 
         # Calculate required TXes and their fees.
-        needed_txes = transaction.chunk_count(payload_chunk_size)
+        needed_txes = chunker.chunk_count()
         print(f"{needed_txes} TXs required.")
 
         required_coins = (needed_txes * total_fee_needed)
         if required_coins >= last_amount:
             raise Exception(f"Not enough coins to cover insertions. ({required_coins} or greater needed.)")
 
-        for payload in transaction.generate_return_payloads(payload_chunk_size):
+        for payload in chunker.generate_return_payloads():
             # Generate the txin
             spendables = [Spendable.from_dict(dict(
                 coin_value=last_amount,
@@ -118,7 +115,7 @@ class CoinDaemon:
                 fee_needed = self.fee(len(payload)) * math.ceil(len(payload) / 20)
             else:
                 gen_function = self.generate_return_txouts
-                fee_needed = self.fee(len(payload)) * math.ceil(len(payload) / self.return_size)
+                fee_needed = self.fee(len(payload)) * math.ceil(len(payload) / chunker.chunk_size)
 
             last_index, txs_out = gen_function(address_hash160, payload, last_amount, fee_needed)
 
@@ -186,7 +183,7 @@ class CoinDaemon:
 
 # test code, remove me later
 if __name__ == "__main__":
-    test_trans = Transaction(
+    test_trans = DiscordChunker(
         server_id=321037402002948099,
         channel_id=321037402002948099,
         user_id=66153853824802816,
@@ -195,5 +192,5 @@ if __name__ == "__main__":
     )
 
     coind = CoinDaemon(1024)
-    # coind.make_txs("Se32GfsJuu76DLmupTWMKpWPtujYrBvfxi", test_trans, True)
-    coind.read_tx("64e3262d4b7c6d528b972d84a6a7667bb07ba0373f68b8ee32d114101fb6b676")
+    coind.make_txs("Se32GfsJuu76DLmupTWMKpWPtujYrBvfxi", test_trans, True)
+    # coind.read_tx("64e3262d4b7c6d528b972d84a6a7667bb07ba0373f68b8ee32d114101fb6b676")
