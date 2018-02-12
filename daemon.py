@@ -36,7 +36,7 @@ class CoinDaemon:
             register_network(network)
 
     def fee(self, size: int=0) -> int:
-        return (STATIC_FEE * 1000000) * (1 + size/1024)
+        return (STATIC_FEE * 1000000) * (1 + size/1024) * 2
 
     @property
     def return_fee(self) -> int:
