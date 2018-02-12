@@ -47,35 +47,37 @@ class CoinDaemon:
         rawtx = self.connection.getrawtransaction(txhash)
         return self.connection.decoderawtransaction(rawtx)
 
-    def find_best_txout_for_addr(self, address: str):
-        best_value = 0
-        index = -1
-        script = ""
+    def get_balance(self, address: str):
+        amount = 0
+
+        unspents = self.connection.listunspent(0, 9999999, [address])
+        for account in unspents:
+            amount += account["amount"]
+
+        return amount
+
+    def get_spendables(self, address: str, amount: int=None, get_all=False):
+        spendables = []
+
+        # Safety for some very good code.
+        if not amount and not get_all and amount <= 0:
+            raise Exception("Amount or get_all flag must be given.")
 
         # Check for unspents.
         unspents = self.connection.listunspent(0, 9999999, [address])
         if not unspents:
             raise Exception(f"No unspent inputs found on adddress {address}.")
 
-        # Store some unspents data.
-        best_tx = unspents[0]
-        tx_id = unspents[0]["txid"]
-        last_tx_decoded = self.decode_raw_tx_from_tx(best_tx["txid"])
+        for tx in unspents:
+            if get_all:
+                spendables.append(Spendable.from_dict(dict(
+                    coin_value=tx["amount"] * 1000000,
+                    script_hex="0000",
+                    tx_hash_hex=tx["txid"],
+                    tx_out_index=tx["vout"]
+                )))
 
-        # Parse vouts
-        for output in last_tx_decoded["vout"]:
-            if address not in output["scriptPubKey"].get("addresses", []):
-                continue
-
-            if output["value"] > best_value:
-                best_value = output["value"]
-                index = output["n"]
-                script = output["scriptPubKey"]["hex"]
-
-        if index == -1:
-            raise Exception("Could not find any TXouts for address.")
-
-        return tx_id, index, script, best_value
+        return spendables
 
     def make_txs(self, address: str, chunker: Chunker, use_sends: bool=False, dont_yield=None) -> bool:
         i = 0
@@ -84,37 +86,27 @@ class CoinDaemon:
 
         # We'll do our own chunking if we have to send to address hashes.
         if use_sends:
-            chunker.chunk_size = 1024 * 8
-        
-        total_fee_needed = self.fee(chunker.data_size)
-
-        last_tx_id, last_index, last_script, last_amount = self.find_best_txout_for_addr(address)
-        last_amount = float(last_amount) * 1000000
+            chunker.chunk_size = 1024 * 160
 
         # Calculate hash160 for later.
         _, _, address_hash160 = netcode_and_type_for_text(address)
 
         # Calculate required TXes and their fees.
+        total_fee_needed = self.fee(chunker.data_size)
+        last_amount = float(self.get_balance(address))
+
         needed_txes = chunker.chunk_count
         print(f"{needed_txes} TXs required.")
 
-        required_coins = (needed_txes * total_fee_needed)
-        if required_coins >= last_amount:
-            raise Exception(f"Not enough coins to cover insertions. ({required_coins} or greater needed.)")
+        if total_fee_needed / 1000000 >= last_amount:
+            raise Exception(f"Not enough coins to cover insertions. ({total_fee_needed / 1000000} or greater needed.)")
 
         for payload in chunker.generate_return_payloads():
-            last_tx_id, last_index, last_script, last_amount = self.find_best_txout_for_addr(address)
-            last_amount = float(last_amount) * 1000000
-            fee_needed = self.fee(len(payload)) * 2
+            last_amount = float(self.get_balance(address)) * 1000000
+            fee_needed = self.fee(len(payload))
 
             # txin generate
-            spendables = [Spendable.from_dict(dict(
-                coin_value=last_amount,
-                script_hex="0000",
-                tx_hash_hex=last_tx_id,
-                tx_out_index=last_index
-            ))]
-
+            spendables = self.get_spendables(address)
             txs_in = [spendable.tx_in() for spendable in spendables]
 
             # txout generate
