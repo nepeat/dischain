@@ -91,7 +91,7 @@ class CoinDaemon:
 
         # We'll do our own chunking if we have to send to address hashes.
         if use_sends:
-            chunker.chunk_size = 1024 * 160
+            chunker.chunk_size = 1024 * 96
 
         # Calculate hash160 for later.
         _, _, address_hash160 = netcode_and_type_for_text(address)
@@ -186,6 +186,7 @@ class CoinDaemon:
         for x in range(len(spendables), 20):
             if (balance - (change_size * len(spendables))) < change_size:
                 print("Warning: Low balance in address.")
+                balance -= (change_size * len(spendables))
                 break
 
             script_pay = ScriptPayToAddress(hash160=address_hash160).script()
