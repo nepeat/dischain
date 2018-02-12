@@ -108,14 +108,12 @@ class CoinDaemon:
             txs_in = [spendable.tx_in() for spendable in spendables]
 
             # txout
-            # XXX: MAKE A BETTER TOTAL ESTIMATION ALGO
+            fee_needed = self.fee(len(payload))
+
             if use_sends:
                 gen_function = self.generate_addr_txouts
-                # XXX: constants file
-                fee_needed = self.fee(len(payload)) * math.ceil(len(payload) / 20)
             else:
                 gen_function = self.generate_return_txouts
-                fee_needed = self.fee(len(payload)) * math.ceil(len(payload) / chunker.chunk_size)
 
             last_index, txs_out = gen_function(address_hash160, payload, last_amount, fee_needed)
 
