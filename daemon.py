@@ -124,7 +124,7 @@ class CoinDaemon:
             last_tx_id = new_tx.id()
             last_amount = last_amount - fee_needed - self.return_fee
 
-            print(new_tx.as_hex(with_time=True), end="\n\n")
+            return new_tx.as_hex(with_time=True)
 
     def generate_addr_txouts(self, address_hash160, _payload, last_amount, fee_needed):
         txs_out = []
@@ -178,7 +178,7 @@ class CoinDaemon:
         result = h2b(result).rstrip(b"\x00")
         datalen = len(result) - 1 - (8 * 4)
         result = struct.unpack(f"!BQQQQ{datalen}s", result)
-        print(result)
+
         return result
 
 # test code, remove me later
@@ -191,6 +191,7 @@ if __name__ == "__main__":
         data="REMOVE KEBAB remove kebab you are worst turk. you are the turk idiot you are the turk smell. return to croatioa. to our croatia cousins you may come our contry. you may live in the zoo….ahahahaha ,bosnia we will never forgeve you. cetnik rascal FUck but fuck asshole turk stink bosnia sqhipere shqipare..turk genocide best day of my life. take a bath of dead turk..ahahahahahBOSNIA WE WILL GET YOU!! do not forget ww2 .albiania we kill the king , albania return to your precious mongolia….hahahahaha idiot turk and bosnian smell so bad..wow i can smell it. REMOVE KEBAB FROM THE PREMISES. you will get caught. russia+usa+croatia+slovak=kill bosnia…you will ww2/ tupac alive in serbia, tupac making album of serbia . fast rap tupac serbia. we are rich and have gold now hahahaha ha because of tupac… you are ppoor stink turk… you live in a hovel hahahaha, you live in a yurt tupac alive numbr one #1 in serbia ….fuck the croatia ,..FUCKk ashol turks no good i spit﻿ in the mouth eye of ur flag and contry. 2pac aliv and real strong wizard kill all the turk farm aminal with rap magic now we the serba rule .ape of the zoo presidant georg bush fukc the great satan and lay egg this egg hatch and bosnia wa;s born. stupid baby form the eggn give bak our clay we will crush u lik a skull of pig. serbia greattst countrey"
     )
 
-    coind = CoinDaemon(1024)
-    coind.make_txs("Se32GfsJuu76DLmupTWMKpWPtujYrBvfxi", test_trans, True)
-    # coind.read_tx("64e3262d4b7c6d528b972d84a6a7667bb07ba0373f68b8ee32d114101fb6b676")
+    coind = CoinDaemon()
+
+    print(coind.make_txs("Se32GfsJuu76DLmupTWMKpWPtujYrBvfxi", test_trans, True), end="\n\n")
+    # print(coind.read_tx("64e3262d4b7c6d528b972d84a6a7667bb07ba0373f68b8ee32d114101fb6b676"))
