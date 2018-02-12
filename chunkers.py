@@ -6,9 +6,9 @@ INITIAL_HEADER_SIZE = HEADER_SIZE + (8 * 3)
 
 
 class Chunker:
-    __slots__ = ["data", "chunk_size"]
+    __slots__ = ["chunk_size"]
 
-    def __init__(self, chunk_size=80):
+    def __init__(self, chunk_size: int=80):
         self.chunk_size = chunk_size
 
     @property
@@ -25,7 +25,7 @@ class Chunker:
         raise NotImplementedError
 
 class DiscordChunker(Chunker):
-    __slots__ = ["server_id", "channel_id", "user_id", "message_id", "data", "chunk_size"]
+    __slots__ = ["chunk_size", "server_id", "channel_id", "user_id", "message_id", "data"]
 
     def __init__(self, server_id: int, channel_id: int, user_id: int, message_id: int, data: str, *args, **kwargs):
         self.server_id = server_id
