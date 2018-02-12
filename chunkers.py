@@ -132,9 +132,13 @@ class FileChunker(Chunker):
             raise Exception(f"Chunk count exceeds nonce limit. ({self.chunk_count > 4294967295})")
 
         for chunk in self.chunk_data():
+            # Special handling for chunk 0 to add the filename to it.
+            if nonce == 0:
+                chunk = self.filename.encode("utf8") +  b";" + chunk
+
             chunk_len = len(chunk)
 
-            # Filename is in the first chunk. Hopefully.
+            # Filename is in the first chunk.
             yield struct.pack(f"!IQ{chunk_len}s", nonce, self.crchash, chunk)
 
             nonce += 1
