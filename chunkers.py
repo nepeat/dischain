@@ -84,13 +84,14 @@ class DiscordChunker(Chunker):
 
 
 class FileChunker(Chunker):
-    __slots__ = ["chunk_size", "file_obj", "crchash"]
+    __slots__ = ["chunk_size", "file_obj", "crchash", "filename"]
 
     HEADER_SIZE = 1 + 8
-    INITIAL_HEADER_SIZE = HEADER_SIZE + (8 * 3)
 
-    def __init__(self, file_obj, *args, **kwargs):
+    def __init__(self, file_obj, filename: str, *args, **kwargs):
         self.file_obj = file_obj
+        self.filename = filename
+
         self.crchash = self.calculate_crc()
 
         super().__init__(*args, **kwargs)
@@ -117,10 +118,6 @@ class FileChunker(Chunker):
     def chunk_data(self):
         # Variable chunk sizes that may change with different altcoin implementations.
         chunk_size_minus_header = self.chunk_size - self.HEADER_SIZE
-        chunk_size_minus_initial_header = self.chunk_size - self.INITIAL_HEADER_SIZE
-
-        # Create the header chunk manually first.
-        yield self.file_obj.read(chunk_size_minus_initial_header)
 
         # Create the rest of the chunks automatically
         for i in range(0, self.data_size, chunk_size_minus_header):
