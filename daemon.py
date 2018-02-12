@@ -89,7 +89,7 @@ class CoinDaemon:
         _, _, address_hash160 = netcode_and_type_for_text(address)
 
         # Calculate required TXes and their fees.
-        needed_txes = chunker.chunk_count()
+        needed_txes = chunker.chunk_count
         print(f"{needed_txes} TXs required.")
 
         required_coins = (needed_txes * total_fee_needed)
