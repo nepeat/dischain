@@ -97,6 +97,17 @@ class CoinDaemon:
             raise Exception(f"Not enough coins to cover insertions. ({required_coins} or greater needed.)")
 
         for payload in chunker.generate_return_payloads():
+            fee_needed = self.fee(len(payload))
+
+            # txout
+            if use_sends:
+                gen_function = self.generate_addr_txouts
+            else:
+                gen_function = self.generate_return_txouts
+
+            last_index, txs_out = gen_function(address_hash160, payload, last_amount, fee_needed)
+            last_amount = last_amount - fee_needed - (self.return_fee * (len(txs_out) - 1))
+
             # Generate the txin
             spendables = [Spendable.from_dict(dict(
                 coin_value=last_amount,
@@ -107,20 +118,9 @@ class CoinDaemon:
 
             txs_in = [spendable.tx_in() for spendable in spendables]
 
-            # txout
-            fee_needed = self.fee(len(payload))
-
-            if use_sends:
-                gen_function = self.generate_addr_txouts
-            else:
-                gen_function = self.generate_return_txouts
-
-            last_index, txs_out = gen_function(address_hash160, payload, last_amount, fee_needed)
-
             new_tx = Tx(1, txs_in, txs_out)
 
             last_tx_id = new_tx.id()
-            last_amount = last_amount - fee_needed - self.return_fee
 
             yield new_tx.as_hex(with_time=True)
 
@@ -132,7 +132,7 @@ class CoinDaemon:
 
         # Create our payment to ourselves.
         script_pay = ScriptPayToAddress(hash160=address_hash160).script()
-        txs_out.append(TxOut(last_amount - fee_needed, script_pay))
+        txs_out.append(TxOut(last_amount - fee_needed - math.ceil((len(_payload) / payload_size) * self.return_fee), script_pay))
 
         # Create all the payments to the data addresses.
         # Chunking from https://github.com/vilhelmgray/FamaMonetae/blob/master/famamonetae.py
@@ -159,7 +159,7 @@ class CoinDaemon:
         txs_out.append(TxOut(self.return_fee, script_data))
 
         script_pay = ScriptPayToAddress(hash160=address_hash160).script()
-        txs_out.append(TxOut(last_amount - fee_needed, script_pay))
+        txs_out.append(TxOut(last_amount - fee_needed - self.return_fee, script_pay))
         
         return 1, txs_out
 
