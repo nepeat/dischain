@@ -1,0 +1,5 @@
+import os
+
+COIN_TO_SATOSHI = 1000000
+STATIC_FEE = float(os.environ.get("COIN_FEE", 0.01))
+HIGHWAY_ROBBERY = 5 * COIN_TO_SATOSHI

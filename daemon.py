@@ -15,8 +15,8 @@ from pycoin.tx.pay_to import ScriptPayToAddress, ScriptNulldata
 from pycoin.serialize import b2h, b2h_rev, h2b, h2b_rev
 import struct
 import time
+from constants import STATIC_FEE, HIGHWAY_ROBBERY
 
-STATIC_FEE = float(os.environ.get("COIN_FEE", 0.01))
 NETWORKS = [
     Network(
         "SHND", "StrongHands", "mainnet",
@@ -201,15 +201,18 @@ if __name__ == "__main__":
 
     coind = CoinDaemon()
 
-    for transaction in coind.make_txs("SP774U2L9YkYNyN7HWnuwr17EKuF3PavKZ", test_trans, True, dont_yield=list(range(0,4))):
+    for transaction in coind.make_txs("SNhe3fDaAkcGyh27D1CvPq2kfGiSUqa6Q2", test_trans, True, dont_yield=list(range(0,0))):
         signed_tx = coind.connection.signrawtransaction(transaction)["hex"]
         if "PRINT_TX" in os.environ:
             print(signed_tx)
 
         while True:
             try:
-                sent_tx = coind.connection.sendrawtransaction(signed_tx, 1)
-                print(sent_tx)
+                if "SEND_TX" in os.environ:
+                    sent_tx = coind.connection.sendrawtransaction(signed_tx, 1)
+                    print(sent_tx)
+                else:
+                    print("got tx but not sending")
                 time.sleep(2)
                 break
             except Exception as e:
