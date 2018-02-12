@@ -69,13 +69,18 @@ class CoinDaemon:
             raise Exception(f"No unspent inputs found on adddress {address}.")
 
         for tx in unspents:
-            if get_all:
-                spendables.append(Spendable.from_dict(dict(
-                    coin_value=tx["amount"] * 1000000,
-                    script_hex="0000",
-                    tx_hash_hex=tx["txid"],
-                    tx_out_index=tx["vout"]
-                )))
+            spendables.append(Spendable.from_dict(dict(
+                coin_value=tx["amount"] * 1000000,
+                script_hex="0000",
+                tx_hash_hex=tx["txid"],
+                tx_out_index=tx["vout"]
+            )))
+
+            if not get_all and (amount < 0):
+                break
+
+            if amount:
+                amount -= tx["amount"] * 1000000
 
         return spendables
 
@@ -105,17 +110,33 @@ class CoinDaemon:
             last_amount = float(self.get_balance(address)) * 1000000
             fee_needed = self.fee(len(payload))
 
-            # txin generate
-            spendables = self.get_spendables(address)
-            txs_in = [spendable.tx_in() for spendable in spendables]
-
             # txout generate
             if use_sends:
                 gen_function = self.generate_addr_txouts
             else:
                 gen_function = self.generate_return_txouts
 
-            txs_out = gen_function(address_hash160, payload, last_amount, fee_needed)
+            txs_out = []
+            txs_out.extend(gen_function(address_hash160, payload, last_amount, fee_needed))
+            txs_out.extend(self.balance_inputs(address, txs_out, last_amount, fee_needed))
+
+            # txin generate
+            total_amount_txout = sum(txo.coin_value for txo in txs_out)
+            spendables = self.get_spendables(address, total_amount_txout)
+            txs_in = [spendable.tx_in() for spendable in spendables] 
+            total_amount_txin = sum(spendable.coin_value for spendable in spendables)
+
+            # tx sanity
+            total_combined = total_amount_txin - total_amount_txout
+
+            if total_combined < 0:
+                print(total_amount_txin)
+                print(total_amount_txout)
+                raise Exception(f"negative transaction ({total_combined / 1000000})")
+            elif total_combined > HIGHWAY_ROBBERY:
+                print(total_amount_txin)
+                print(total_amount_txout)
+                raise Exception(f"overpaying fees ({total_combined / 1000000})")
 
             # tx generate
             new_tx = Tx(1, txs_in, txs_out)
@@ -125,15 +146,64 @@ class CoinDaemon:
 
             i += 1
 
+    def balance_inputs(self, address: str, existing_txouts, balance: int, total_fee):
+        new_txouts = []
+        change_size = 150 * 1000000  # 150 coins
+        total_out = sum(txo.coin_value for txo in existing_txouts)
+        balance = balance - total_out
+        unused_balance = 0
+
+        spendables = self.get_spendables(address, get_all=True)
+
+        # Prune out spendables that we will spend.
+        for spendable in spendables.copy():
+            if total_out == 0:
+                unused_balance += spendable.coin_value
+                continue
+
+            if total_out < 0:
+                raise Exception(f"total_out is negative. ({total_out})")
+
+            if spendable.coin_value > total_out:
+                total_out = 0
+                spendables.remove(spendable)
+            elif total_out > spendable.coin_value:
+                spendables.remove(spendable)
+                total_out -= spendable.coin_value
+
+        # XXX: Find a way to cleanly unify this.
+        _, _, address_hash160 = netcode_and_type_for_text(address)
+
+        # 15 TXs in our own wallet should be a good buffer to have.
+        # Also considering that partial spends nukes the whole spendable anyways.
+        if len(spendables) >= 15:
+            script_pay = ScriptPayToAddress(hash160=address_hash160).script()
+            new_txouts.append(TxOut(balance - unused_balance - total_fee, script_pay))
+            return new_txouts
+
+        # Create our payment to ourselves if we still have the coins.
+
+        for x in range(len(spendables), 20):
+            if (balance - (change_size * len(spendables))) < change_size:
+                print("Warning: Low balance in address.")
+                break
+
+            script_pay = ScriptPayToAddress(hash160=address_hash160).script()
+            new_txouts.append(TxOut(change_size, script_pay))
+            balance -= change_size
+
+        # Change the rest of the balance to ourselves if we still have a lot of coins.
+        if balance > 0:
+            script_pay = ScriptPayToAddress(hash160=address_hash160).script()
+            new_txouts.append(TxOut(balance - total_fee, script_pay))
+
+        return new_txouts
+
     def generate_addr_txouts(self, address_hash160, _payload, last_amount, fee_needed):
         txs_out = []
         payload = io.BytesIO(_payload)
         # XXX: constants file
         payload_size = 20
-
-        # Create our payment to ourselves.
-        script_pay = ScriptPayToAddress(hash160=address_hash160).script()
-        txs_out.append(TxOut(last_amount - fee_needed - math.ceil((len(_payload) / payload_size) * self.return_fee), script_pay))
 
         # Create all the payments to the data addresses.
         # Chunking from https://github.com/vilhelmgray/FamaMonetae/blob/master/famamonetae.py
@@ -158,9 +228,6 @@ class CoinDaemon:
 
         script_data = ScriptNulldata(nulldata=payload).script()
         txs_out.append(TxOut(self.return_fee, script_data))
-
-        script_pay = ScriptPayToAddress(hash160=address_hash160).script()
-        txs_out.append(TxOut(last_amount - fee_needed - self.return_fee, script_pay))
         
         return txs_out
 
