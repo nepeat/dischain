@@ -91,7 +91,7 @@ class CoinDaemon:
 
         # We'll do our own chunking if we have to send to address hashes.
         if use_sends:
-            chunker.chunk_size = 1024 * 96
+            chunker.chunk_size = 1024 * 128
 
         # Calculate hash160 for later.
         _, _, address_hash160 = netcode_and_type_for_text(address)
@@ -280,7 +280,7 @@ if __name__ == "__main__":
                     sent_tx = coind.connection.sendrawtransaction(signed_tx, 1)
                     print(sent_tx)
                 else:
-                    print("got tx but not sending")
+                    print(f"got tx of len {len(signed_tx)} but not sending")
                 time.sleep(2)
                 break
             except Exception as e:
