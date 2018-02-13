@@ -118,7 +118,7 @@ class CoinDaemon:
 
             txs_out = []
             txs_out.extend(gen_function(address_hash160, payload, last_amount, fee_needed))
-            txs_out.extend(self.balance_inputs(address, txs_out, last_amount, fee_needed))
+            txs_out.extend(self.create_change(address, txs_out, last_amount))
 
             # txin generate
             total_amount_txout = sum(txo.coin_value for txo in txs_out)
@@ -126,8 +126,16 @@ class CoinDaemon:
             txs_in = [spendable.tx_in() for spendable in spendables] 
             total_amount_txin = sum(spendable.coin_value for spendable in spendables)
 
+            # We need to round the change.
+            round_change_tx, round_change_amount = self.round_change(address_hash160, total_amount_txin, total_amount_txout, fee_needed)
+            txs_out.append(round_change_tx)
+            total_amount_txout += round_change_amount
+
             # tx sanity
             total_combined = total_amount_txin - total_amount_txout
+
+            print("IN", total_amount_txin / 1000000)
+            print("OUT", total_amount_txout / 1000000)
 
             if total_combined < 0:
                 print(total_amount_txin)
@@ -146,27 +154,25 @@ class CoinDaemon:
 
             i += 1
 
-    def balance_inputs(self, address: str, existing_txouts, balance: int, total_fee):
+    def create_change(self, address: str, existing_txouts, balance: int):
         new_txouts = []
-        change_size = 50 * 1000000  # 150 coins
+        change_size = 50 * 1000000  # 50 coins
         total_out = sum(txo.coin_value for txo in existing_txouts)
         balance = balance - total_out
-        unused_balance = 0
 
         spendables = self.get_spendables(address, get_all=True)
 
         # Prune out spendables that we will spend.
         for spendable in spendables.copy():
             if total_out == 0:
-                unused_balance += spendable.coin_value
                 continue
 
             if total_out < 0:
                 raise Exception(f"total_out is negative. ({total_out})")
 
             if spendable.coin_value > total_out:
-                total_out = 0
                 spendables.remove(spendable)
+                break
             elif total_out > spendable.coin_value:
                 spendables.remove(spendable)
                 total_out -= spendable.coin_value
@@ -177,28 +183,28 @@ class CoinDaemon:
         # 15 TXs in our own wallet should be a good buffer to have.
         # Also considering that partial spends nukes the whole spendable anyways.
         if len(spendables) >= 15:
-            script_pay = ScriptPayToAddress(hash160=address_hash160).script()
-            new_txouts.append(TxOut(balance - unused_balance - total_fee, script_pay))
-            return new_txouts
+            return []
 
         # Create our payment to ourselves if we still have the coins.
+        if (balance - (change_size * len(spendables))) < change_size:
+            print("Warning: Low balance in address.")
+            balance -= (change_size * len(spendables))
 
         for x in range(len(spendables), 20):
-            if (balance - (change_size * len(spendables))) < change_size:
-                print("Warning: Low balance in address.")
-                balance -= (change_size * len(spendables))
+            balance -= change_size
+            if balance < 0:
                 break
 
             script_pay = ScriptPayToAddress(hash160=address_hash160).script()
             new_txouts.append(TxOut(change_size, script_pay))
-            balance -= change_size
-
-        # Change the rest of the balance to ourselves if we still have a lot of coins.
-        if balance > 0:
-            script_pay = ScriptPayToAddress(hash160=address_hash160).script()
-            new_txouts.append(TxOut(balance - total_fee, script_pay))
 
         return new_txouts
+
+    def round_change (self, address_hash160: str, txin_amount: int, txout_amount, fee_needed: int):
+        total_payment = txin_amount - txout_amount - fee_needed
+
+        script_pay = ScriptPayToAddress(hash160=address_hash160).script()
+        return TxOut(total_payment, script_pay), total_payment
 
     def generate_addr_txouts(self, address_hash160, _payload, last_amount, fee_needed):
         txs_out = []
