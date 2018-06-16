@@ -121,10 +121,14 @@ class CoinDaemon:
             txs_out.extend(self.create_change(address, txs_out, last_amount))
 
             # txin generate
-            total_amount_txout = sum(txo.coin_value for txo in txs_out)
-            spendables = self.get_spendables(address, total_amount_txout)
-            txs_in = [spendable.tx_in() for spendable in spendables] 
-            total_amount_txin = sum(spendable.coin_value for spendable in spendables)
+            total_amount_txout = remainder_txout = sum(txo.coin_value for txo in txs_out)
+            total_amount_txin = 0
+            txs_in = []
+            for spendable in self.get_spendables(address, total_amount_txout):
+                if remainder_txout < spendable.coin_value:
+                    break
+                txs_in.append(spendable.tx_in())
+                total_amount_txin += spendable.coin_value
 
             # We need to round the change.
             round_change_tx, round_change_amount = self.round_change(address_hash160, total_amount_txin, total_amount_txout, fee_needed)
