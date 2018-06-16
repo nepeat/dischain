@@ -287,7 +287,7 @@ if __name__ == "__main__":
                     print(sent_tx)
                 else:
                     print(f"got tx of len {len(signed_tx)} but not sending")
-                time.sleep(2)
+                time.sleep(5)
                 break
             except Exception as e:
                 print("Failed to send TX. (%s)" % (e))
