@@ -130,11 +130,21 @@ class CoinDaemon:
             total_amount_txout = remainder_txout = sum(txo.coin_value for txo in txs_out)
             total_amount_txin = 0
             txs_in = []
-            for spendable in self.get_spendables(address, total_amount_txout):
-                if remainder_txout < spendable.coin_value:
+            # We sort by reverse if we want to devour the latest large TXIn chunk for making change addresses.
+            # Sort by random if we have enough spare change.
+            creates_change_addrs = (total_amount_txout / 1000000) > 100  # XXX/HACK This is assuming spending is not above 100 coins.
+            spendables = self.get_spendables(address, total_amount_txout)
+            if creates_change_addrs:
+                spendables.sort(key=lambda _: _.coin_value, reverse=creates_change_addrs)
+            else:
+                random.shuffle(spendables)
+            for spendable in spendables:
+                print(f"OUT {remainder_txout / 1000000}; CV {spendable.coin_value / 1000000}")
+                if remainder_txout < 0:
                     break
                 txs_in.append(spendable.tx_in())
                 total_amount_txin += spendable.coin_value
+                remainder_txout -= spendable.coin_value
 
             # We need to round the change. / txout generate stage 2
             round_change_tx, round_change_amount = self.round_change(address_hash160, total_amount_txin, total_amount_txout, fee_needed)
@@ -191,7 +201,6 @@ class CoinDaemon:
         _, _, address_hash160 = netcode_and_type_for_text(address)
 
         # 15 TXs in our own wallet should be a good buffer to have.
-        # Also considering that partial spends nukes the whole spendable anyways.
         if len(spendables) >= 15:
             return []
 
