@@ -156,7 +156,7 @@ class CoinDaemon:
 
     def create_change(self, address: str, existing_txouts, balance: int):
         new_txouts = []
-        change_size = 50 * 1000000  # 50 coins
+        change_size = 100 * 1000000  # 100 coins
         total_out = sum(txo.coin_value for txo in existing_txouts)
         balance = balance - total_out
 
