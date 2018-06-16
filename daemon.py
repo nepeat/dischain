@@ -1,6 +1,7 @@
 import os
 import io
 import math
+import random
 from pycoin.networks import register_network
 from pycoin.networks.network import Network
 from pycoin.services import get_default_providers_for_netcode
@@ -113,15 +114,16 @@ class CoinDaemon:
             raise Exception(f"Not enough coins to cover insertions. ({total_fee_needed / 1000000} or greater needed.)")
 
         for payload in chunker.generate_return_payloads():
-            if i not in dont_yield:
+            if i in dont_yield:
                 i += 1
                 continue
 
             last_amount = float(self.get_balance(address)) * 1000000
             fee_needed = self.fee(len(payload))
 
+            # txout generate stage 1
             txs_out = []
-            txs_out.extend(gen_function(address_hash160, payload, last_amount, fee_needed))
+            txs_out.extend(gen_function(address_hash160, payload, fee_needed))
             txs_out.extend(self.create_change(address, txs_out, last_amount))
 
             # txin generate
@@ -134,16 +136,17 @@ class CoinDaemon:
                 txs_in.append(spendable.tx_in())
                 total_amount_txin += spendable.coin_value
 
-            # We need to round the change.
+            # We need to round the change. / txout generate stage 2
             round_change_tx, round_change_amount = self.round_change(address_hash160, total_amount_txin, total_amount_txout, fee_needed)
             txs_out.append(round_change_tx)
             total_amount_txout += round_change_amount
 
-            # tx sanity
+            # tx sanity checks
             total_combined = total_amount_txin - total_amount_txout
 
             print(f"[tx#{i}] IN {total_amount_txin / 1000000}")
             print(f"[tx#{i}] OUT {total_amount_txout / 1000000}")
+            print(f"[tx#{i}] TOTAL {total_combined / 1000000}")
 
             if total_combined < 0:
                 print(total_amount_txin)
@@ -213,7 +216,7 @@ class CoinDaemon:
         script_pay = ScriptPayToAddress(hash160=address_hash160).script()
         return TxOut(total_payment, script_pay), total_payment
 
-    def generate_addr_txouts(self, address_hash160, _payload, last_amount, fee_needed):
+    def generate_addr_txouts(self, address_hash160, _payload, fee_needed):
         txs_out = []
         payload = io.BytesIO(_payload)
         # XXX: constants file
@@ -237,7 +240,7 @@ class CoinDaemon:
 
         return txs_out
 
-    def generate_return_txouts(self, address_hash160, payload, last_amount, fee_needed):
+    def generate_return_txouts(self, address_hash160, payload, fee_needed):
         txs_out = []
 
         script_data = ScriptNulldata(nulldata=payload).script()
