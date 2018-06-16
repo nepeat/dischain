@@ -100,8 +100,8 @@ class CoinDaemon:
         total_fee_needed = self.fee(chunker.data_size)
         last_amount = float(self.get_balance(address))
 
-        needed_txes = chunker.chunk_count
-        print(f"{needed_txes} TXs required.")
+        print(f"{chunker.chunk_count} TXs will be made.")
+        print(f"{total_fee_needed / 1000000} coins will be burnt.")
 
         if total_fee_needed / 1000000 >= last_amount:
             raise Exception(f"Not enough coins to cover insertions. ({total_fee_needed / 1000000} or greater needed.)")
