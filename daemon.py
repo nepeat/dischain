@@ -113,6 +113,10 @@ class CoinDaemon:
             raise Exception(f"Not enough coins to cover insertions. ({total_fee_needed / 1000000} or greater needed.)")
 
         for payload in chunker.generate_return_payloads():
+            if i not in dont_yield:
+                i += 1
+                continue
+
             last_amount = float(self.get_balance(address)) * 1000000
             fee_needed = self.fee(len(payload))
 
@@ -153,8 +157,7 @@ class CoinDaemon:
             # tx generate
             new_tx = Tx(1, txs_in, txs_out)
 
-            if i not in dont_yield:
-                yield new_tx.as_hex(with_time=True)
+            yield new_tx.as_hex(with_time=True)
 
             i += 1
 
