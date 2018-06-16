@@ -1,2 +1,3 @@
 pycoin
 crcmod
+python-bitcoinrpc
