@@ -100,6 +100,12 @@ class CoinDaemon:
         total_fee_needed = self.fee(chunker.data_size)
         last_amount = float(self.get_balance(address))
 
+        # Pick the generation function appropiate for our coin.
+        if use_sends:
+            gen_function = self.generate_addr_txouts
+        else:
+            gen_function = self.generate_return_txouts
+
         print(f"{chunker.chunk_count} TXs will be made.")
         print(f"{total_fee_needed / 1000000} coins will be burnt.")
 
@@ -109,12 +115,6 @@ class CoinDaemon:
         for payload in chunker.generate_return_payloads():
             last_amount = float(self.get_balance(address)) * 1000000
             fee_needed = self.fee(len(payload))
-
-            # txout generate
-            if use_sends:
-                gen_function = self.generate_addr_txouts
-            else:
-                gen_function = self.generate_return_txouts
 
             txs_out = []
             txs_out.extend(gen_function(address_hash160, payload, last_amount, fee_needed))
