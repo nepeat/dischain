@@ -200,7 +200,7 @@ class CoinDaemon:
             print("Warning: Low balance in address.")
             balance -= (change_size * len(spendables))
 
-        for x in range(len(spendables), 20):
+        for x in range(len(spendables), 50):
             balance -= change_size
             if balance < 0:
                 break
