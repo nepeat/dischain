@@ -146,7 +146,7 @@ class CoinDaemon:
 
             print(f"[tx#{i}] IN {total_amount_txin / 1000000}")
             print(f"[tx#{i}] OUT {total_amount_txout / 1000000}")
-            print(f"[tx#{i}] TOTAL {total_combined / 1000000}")
+            print(f"[tx#{i}] FEE {total_combined / 1000000}")
 
             if total_combined < 0:
                 print(total_amount_txin)
