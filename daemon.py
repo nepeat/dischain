@@ -134,17 +134,17 @@ class CoinDaemon:
             # tx sanity
             total_combined = total_amount_txin - total_amount_txout
 
-            print("IN", total_amount_txin / 1000000)
-            print("OUT", total_amount_txout / 1000000)
+            print(f"[tx#{i}] IN {total_amount_txin / 1000000}")
+            print(f"[tx#{i}] OUT {total_amount_txout / 1000000}")
 
             if total_combined < 0:
                 print(total_amount_txin)
                 print(total_amount_txout)
-                raise Exception(f"negative transaction ({total_combined / 1000000})")
+                raise Exception(f"[tx#{i}] negative transaction ({total_combined / 1000000})")
             elif total_combined > HIGHWAY_ROBBERY:
                 print(total_amount_txin)
                 print(total_amount_txout)
-                raise Exception(f"overpaying fees ({total_combined / 1000000})")
+                raise Exception(f"[tx#{i}] overpaying fees ({total_combined / 1000000})")
 
             # tx generate
             new_tx = Tx(1, txs_in, txs_out)
