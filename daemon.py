@@ -85,11 +85,7 @@ class CoinDaemon:
 
         return spendables
 
-    def make_txs(self, address: str, chunker: Chunker, use_sends: bool=False, dont_yield=None) -> bool:
-        i = 0
-        if not dont_yield:
-            dont_yield = []
-
+    def make_txs(self, address: str, chunker: Chunker, use_sends: bool=False) -> bool:
         # We'll do our own chunking if we have to send to address hashes.
         if use_sends:
             chunker.chunk_size = 1024 * 128
@@ -113,11 +109,7 @@ class CoinDaemon:
         if total_fee_needed / 1000000 >= last_amount:
             raise Exception(f"Not enough coins to cover insertions. ({total_fee_needed / 1000000} or greater needed.)")
 
-        for payload in chunker.generate_return_payloads():
-            if i in dont_yield:
-                i += 1
-                continue
-
+        for nonce, payload in chunker.generate_return_payloads():
             last_amount = float(self.get_balance(address)) * 1000000
             fee_needed = self.fee(len(payload))
 
@@ -154,25 +146,23 @@ class CoinDaemon:
             # tx sanity checks
             total_combined = total_amount_txin - total_amount_txout
 
-            print(f"[tx#{i}] IN {total_amount_txin / 1000000}")
-            print(f"[tx#{i}] OUT {total_amount_txout / 1000000}")
-            print(f"[tx#{i}] FEE {total_combined / 1000000}")
+            print(f"[tx#{nonce}] IN {total_amount_txin / 1000000}")
+            print(f"[tx#{nonce}] OUT {total_amount_txout / 1000000}")
+            print(f"[tx#{nonce}] FEE {total_combined / 1000000}")
 
             if total_combined < 0:
                 print(total_amount_txin)
                 print(total_amount_txout)
-                raise Exception(f"[tx#{i}] negative transaction ({total_combined / 1000000})")
+                raise Exception(f"[tx#{nonce}] negative transaction ({total_combined / 1000000})")
             elif total_combined > HIGHWAY_ROBBERY:
                 print(total_amount_txin)
                 print(total_amount_txout)
-                raise Exception(f"[tx#{i}] overpaying fees ({total_combined / 1000000})")
+                raise Exception(f"[tx#{nonce}] overpaying fees ({total_combined / 1000000})")
 
             # tx generate
             new_tx = Tx(1, txs_in, txs_out)
 
             yield new_tx.as_hex(with_time=True)
-
-            i += 1
 
     def create_change(self, address: str, existing_txouts, balance: int):
         new_txouts = []
@@ -275,19 +265,23 @@ class CoinDaemon:
 
 # test code, remove me later
 if __name__ == "__main__":
+    dont_yield = list(range(0,259))
+
     if "TEST_DISCORD" in os.environ:
         test_trans = DiscordChunker(
             server_id=321037402002948099,
             channel_id=321037402002948099,
             user_id=66153853824802816,
             message_id=411956284196126731,
-            data="REMOVE KEBAB remove kebab you are worst turk. you are the turk idiot you are the turk smell. return to croatioa. to our croatia cousins you may come our contry. you may live in the zoo….ahahahaha ,bosnia we will never forgeve you. cetnik rascal FUck but fuck asshole turk stink bosnia sqhipere shqipare..turk genocide best day of my life. take a bath of dead turk..ahahahahahBOSNIA WE WILL GET YOU!! do not forget ww2 .albiania we kill the king , albania return to your precious mongolia….hahahahaha idiot turk and bosnian smell so bad..wow i can smell it. REMOVE KEBAB FROM THE PREMISES. you will get caught. russia+usa+croatia+slovak=kill bosnia…you will ww2/ tupac alive in serbia, tupac making album of serbia . fast rap tupac serbia. we are rich and have gold now hahahaha ha because of tupac… you are ppoor stink turk… you live in a hovel hahahaha, you live in a yurt tupac alive numbr one #1 in serbia ….fuck the croatia ,..FUCKk ashol turks no good i spit﻿ in the mouth eye of ur flag and contry. 2pac aliv and real strong wizard kill all the turk farm aminal with rap magic now we the serba rule .ape of the zoo presidant georg bush fukc the great satan and lay egg this egg hatch and bosnia wa;s born. stupid baby form the eggn give bak our clay we will crush u lik a skull of pig. serbia greattst countrey"
+            data="REMOVE KEBAB remove kebab you are worst turk. you are the turk idiot you are the turk smell. return to croatioa. to our croatia cousins you may come our contry. you may live in the zoo….ahahahaha ,bosnia we will never forgeve you. cetnik rascal FUck but fuck asshole turk stink bosnia sqhipere shqipare..turk genocide best day of my life. take a bath of dead turk..ahahahahahBOSNIA WE WILL GET YOU!! do not forget ww2 .albiania we kill the king , albania return to your precious mongolia….hahahahaha idiot turk and bosnian smell so bad..wow i can smell it. REMOVE KEBAB FROM THE PREMISES. you will get caught. russia+usa+croatia+slovak=kill bosnia…you will ww2/ tupac alive in serbia, tupac making album of serbia . fast rap tupac serbia. we are rich and have gold now hahahaha ha because of tupac… you are ppoor stink turk… you live in a hovel hahahaha, you live in a yurt tupac alive numbr one #1 in serbia ….fuck the croatia ,..FUCKk ashol turks no good i spit﻿ in the mouth eye of ur flag and contry. 2pac aliv and real strong wizard kill all the turk farm aminal with rap magic now we the serba rule .ape of the zoo presidant georg bush fukc the great satan and lay egg this egg hatch and bosnia wa;s born. stupid baby form the eggn give bak our clay we will crush u lik a skull of pig. serbia greattst countrey",
+            dont_yield=dont_yield,
         )
     elif "TEST_FILE" in os.environ:
         test_trans = FileChunker(
             open(os.environ["TEST_FILE"], "rb"),
             os.path.basename(os.environ["TEST_FILE"]),
-            chunk_size=1024
+            chunk_size=1024,
+            dont_yield=dont_yield,
         )
     else:
         raise Exception("environ not set TEST_DISCORD/TEST_FILE")

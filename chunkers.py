@@ -5,10 +5,14 @@ import crcmod
 
 
 class Chunker:
-    __slots__ = ["chunk_size"]
+    __slots__ = ["chunk_size", "dont_yield"]
 
-    def __init__(self, chunk_size: int=80):
+    def __init__(self, chunk_size: int=80, dont_yield=None):
         self.chunk_size = chunk_size
+        if not dont_yield:
+            self.dont_yield = []
+        else:
+            self.dont_yield = dont_yield
 
     @property
     def data_size(self) -> int:
@@ -51,26 +55,27 @@ class DiscordChunker(Chunker):
     def chunk_data(self):
         data_copy = bytes(self.data)
         header_chunk_size = self.chunk_size - self.HEADER_SIZE
-        chunks = []
+        nonce = 0
 
         # Create the header chunk manually first.
-        yield data_copy[0:self.chunk_size - self.INITIAL_HEADER_SIZE]
+        yield nonce, data_copy[0:self.chunk_size - self.INITIAL_HEADER_SIZE]
         data_copy = data_copy[self.chunk_size - self.INITIAL_HEADER_SIZE:]
+        nonce += 1
 
         # Create the rest of the chunks automatically
         for i in range(0, len(data_copy), header_chunk_size):
-            yield data_copy[i:i + header_chunk_size]
-
-        return chunks
+            yield nonce, data_copy[i:i + header_chunk_size]
+            nonce += 1
 
     def generate_return_payloads(self):
-        nonce = 0
-
         # Sanity check
         if self.chunk_count > 255:
             raise Exception(f"Chunk count exceeds nonce limit. ({self.chunk_count > 255})")
 
-        for chunk in self.chunk_data():
+        for nonce, chunk in self.chunk_data():
+            if nonce in self.dont_yield:
+                continue
+
             chunk_len = len(chunk)
 
             if nonce == 0:
@@ -78,9 +83,7 @@ class DiscordChunker(Chunker):
             else:
                 payload = struct.pack(f"!BQ{chunk_len}s", nonce, self.message_id, chunk)
 
-            yield payload
-
-            nonce += 1
+            yield nonce, payload
 
 
 class FileChunker(Chunker):
@@ -120,18 +123,21 @@ class FileChunker(Chunker):
         chunk_size_minus_header = self.chunk_size - self.HEADER_SIZE
 
         # Create the rest of the chunks automatically
+        nonce = 0
         for i in range(0, self.data_size, chunk_size_minus_header):
-            yield self.file_obj.read(chunk_size_minus_header)
+            yield nonce, self.file_obj.read(chunk_size_minus_header)
+            nonce += 1
 
     def generate_return_payloads(self):
-        nonce = 0
-
         # Sanity check
         # XXX make uint32 constant
         if self.chunk_count > 4294967295:
             raise Exception(f"Chunk count exceeds nonce limit. ({self.chunk_count > 4294967295})")
 
-        for chunk in self.chunk_data():
+        for nonce, chunk in self.chunk_data():
+            if nonce in self.dont_yield:
+                continue
+
             # Special handling for chunk 0 to add the filename to it.
             if nonce == 0:
                 chunk = self.filename.encode("utf8") +  b";" + chunk
@@ -139,6 +145,4 @@ class FileChunker(Chunker):
             chunk_len = len(chunk)
 
             # Filename is in the first chunk.
-            yield struct.pack(f"!IQ{chunk_len}s", nonce, self.crchash, chunk)
-
-            nonce += 1
+            yield nonce, struct.pack(f"!IQ{chunk_len}s", nonce, self.crchash, chunk)
