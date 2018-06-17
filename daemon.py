@@ -119,7 +119,8 @@ class CoinDaemon:
             txs_out.extend(self.create_change(address, txs_out, last_amount))
 
             # txin generate
-            total_amount_txout = remainder_txout = sum(txo.coin_value for txo in txs_out)
+            total_amount_txout = sum(txo.coin_value for txo in txs_out)
+            remainder_txout = total_amount_txout + fee_needed
             total_amount_txin = 0
             txs_in = []
             # We sort by reverse if we want to devour the latest large TXIn chunk for making change addresses.
@@ -140,8 +141,11 @@ class CoinDaemon:
 
             # We need to round the change. / txout generate stage 2
             round_change_tx, round_change_amount = self.round_change(address_hash160, total_amount_txin, total_amount_txout, fee_needed)
-            txs_out.append(round_change_tx)
-            total_amount_txout += round_change_amount
+            # XXX/HACK This fixes a bug where the round change somehow gets to negative values.
+            # I don't even know how that even happens... yet.
+            if round_change_tx.coin_value > 0:
+                txs_out.append(round_change_tx)
+                total_amount_txout += round_change_amount
 
             # tx sanity checks
             total_combined = total_amount_txin - total_amount_txout
