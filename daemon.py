@@ -292,7 +292,7 @@ if __name__ == "__main__":
 
     coind = CoinDaemon()
 
-    for transaction in coind.make_txs("SNhe3fDaAkcGyh27D1CvPq2kfGiSUqa6Q2", test_trans, True, dont_yield=list(range(0,0))):
+    for transaction in coind.make_txs("ShrekMexruwbuTSyouHPzaAW3FQCeCY5zJ", test_trans, True):
         signed_tx = coind.connection.signrawtransaction(transaction)["hex"]
         if "PRINT_TX" in os.environ:
             print(signed_tx)
@@ -304,7 +304,7 @@ if __name__ == "__main__":
                     print(sent_tx)
                 else:
                     print(f"got tx of len {len(signed_tx)} but not sending")
-                time.sleep(5)
+                time.sleep(30)
                 break
             except Exception as e:
                 print("Failed to send TX. (%s)" % (e))
